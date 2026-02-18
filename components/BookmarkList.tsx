@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Bookmark } from "@/lib/types";
 import BookmarkCard from "./BookmarkCard";
-import { type RealtimeChannel } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
 interface BookmarkListProps {
@@ -29,13 +28,13 @@ export default function BookmarkList({ initialBookmarks, userId }: BookmarkListP
         const channel = supabase
             .channel(channelName)
             .on(
-                "postgres_changes" as any,
+                "postgres_changes",
                 {
                     event: "*",
                     schema: "public",
                     table: "bookmarks",
                 },
-                (payload: any) => {
+                (payload) => {
                     if (payload.eventType === "INSERT") {
                         const newBookmark = payload.new as Bookmark;
                         setBookmarks((prev) => {
