@@ -37,16 +37,25 @@ export default function AddBookmarkForm() {
             return;
         }
 
-        const { error: insertError } = await supabase.from("bookmarks").insert({
-            title: title.trim(),
-            url: normalizedUrl,
-            user_id: user.id,
-        });
+        const { data, error: insertError } = await supabase
+            .from("bookmarks")
+            .insert({
+                title: title.trim(),
+                url: normalizedUrl,
+                user_id: user.id,
+            })
+            .select() // Return the inserted data immediately
+            .single();
 
         setLoading(false);
+
         if (insertError) {
             setError(insertError.message);
         } else {
+            // Dispatch custom event for instant UI update (bypassing Realtime latency for local user)
+            const event = new CustomEvent("new-bookmark", { detail: data });
+            window.dispatchEvent(event);
+
             setTitle("");
             setUrl("");
         }
