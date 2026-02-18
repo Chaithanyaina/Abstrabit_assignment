@@ -1,9 +1,19 @@
 "use client";
 
+import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
     const supabase = createClient();
+
+    useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "SIGNED_IN" && session) {
+                window.location.href = "/dashboard"; // Hard redirect to clear state
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [supabase]);
 
     const handleGoogleSignIn = async () => {
         await supabase.auth.signInWithOAuth({

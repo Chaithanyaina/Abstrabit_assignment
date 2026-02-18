@@ -24,46 +24,60 @@ export function useRealtimeBookmarks(userId: string) {
     useEffect(() => {
         if (!userId) return;
 
-        console.log(`[useRealtimeBookmarks] Initializing channel for user: ${userId}`);
-        const channelName = `bookmarks-user-${userId}`;
+        let channel: ReturnType<typeof supabase.channel> | null = null;
 
-        const channel = supabase
-            .channel(channelName)
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "bookmarks",
-                },
-                (payload) => {
-                    console.log("[useRealtimeBookmarks] Event received:", payload.eventType);
+        const setupSubscription = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
 
+            if (!session) {
+                console.log("[useRealtimeBookmarks] No session found, skipping subscription");
+                return;
+            }
+
+            console.log(`[useRealtimeBookmarks] Initializing channel for user: ${userId}`);
+            const channelName = `bookmarks-user-${userId}`;
+
+            // Channel with RLS policies enabled by the authenticated client
+            channel = supabase
+                .channel(channelName)
+                .on(
+                    "postgres_changes",
+                    {
+                        event: "*",
+                        schema: "public",
+                        table: "bookmarks",
+                    },
+                    (payload) => {
+                        console.log("[useRealtimeBookmarks] Event received:", payload.eventType);
+
+                        if (isMounted.current) {
+                            setRealtimeEvent({
+                                type: payload.eventType as "INSERT" | "DELETE",
+                                payload: payload,
+                                timestamp: Date.now(),
+                            });
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    console.log(`[useRealtimeBookmarks] Status: ${status}`);
                     if (isMounted.current) {
-                        setRealtimeEvent({
-                            type: payload.eventType as "INSERT" | "DELETE",
-                            payload: payload,
-                            timestamp: Date.now(),
-                        });
+                        if (status === "SUBSCRIBED") {
+                            setStatus("connected");
+                        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                            setStatus("error");
+                        } else {
+                            setStatus("connecting");
+                        }
                     }
-                }
-            )
-            .subscribe((status) => {
-                console.log(`[useRealtimeBookmarks] Status: ${status}`);
-                if (isMounted.current) {
-                    if (status === "SUBSCRIBED") {
-                        setStatus("connected");
-                    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-                        setStatus("error");
-                    } else {
-                        setStatus("connecting");
-                    }
-                }
-            });
+                });
+        };
+
+        setupSubscription();
 
         return () => {
             console.log(`[useRealtimeBookmarks] Cleaning up channel`);
-            supabase.removeChannel(channel);
+            if (channel) supabase.removeChannel(channel);
         };
     }, [userId, supabase]);
 
